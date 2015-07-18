@@ -32,8 +32,8 @@ module SchemaValidations
 
       def validates_precision_of(attr_names, opts = { })
         validates_each(attr_names, {}) do |record, attr, value|
-          value = record.send("#{attr}_before_type_cast")
-          next if value.blank? || !value.is_numeric?
+          value = record.send("#{attr}_before_type_cast").to_s.strip
+          next unless value.present? && value.include?('.')
 
           int, dec = value.split('.')
 
@@ -46,7 +46,6 @@ module SchemaValidations
           end
         end
       end
-
 
       # Per-model override of Config options.  Use via, e.g.
       #     class MyModel < ActiveRecord::Base
