@@ -175,6 +175,23 @@ module SchemaValidations
         end
       end
 
+      def validates_precision_of(attr_names, opts = { })
+        validates_each(attr_names, {}) do |record, attr, value|
+          value = record.send("#{attr}_before_type_cast")
+          next if value.blank? || !value.is_numeric?
+
+          int, dec = value.split('.')
+
+          if int && int.size > opts[:precision]
+            max_int_value = 10 ** (opts[:precision] - opts[:scale]) - 1
+            record.errors.add(attr, "maximum value is #{max_int_value}")
+          end
+          if dec && dec.to_i > 0 && dec.to_s.gsub(/\A0+\Z/,'').size > opts[:scale]
+            record.errors.add(attr, "field accepts at most #{opts[:scale]} decimals")
+          end
+        end
+      end
+
       def _filter_validation(macro, name) #:nodoc:
         config = schema_validations_config
         types = [macro]
