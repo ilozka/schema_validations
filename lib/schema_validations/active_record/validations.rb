@@ -47,6 +47,7 @@ module SchemaValidations
         end
       end
 
+
       # Per-model override of Config options.  Use via, e.g.
       #     class MyModel < ActiveRecord::Base
       #         schema_validations :auto_create => false
@@ -180,7 +181,7 @@ module SchemaValidations
       end
 
       def validate_logged_numericality(name)
-        validates_numericality_of name, :allow_nil => true
+        validate_logged :validates_numericality_of, name, :allow_nil => true
       end
 
       def validate_logged(method, arg, opts={}) #:nodoc:
