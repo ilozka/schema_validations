@@ -99,6 +99,7 @@ module SchemaValidations
           datatype = case
                      when respond_to?(:defined_enums) && defined_enums.has_key?(column.name) then :enum
                      when column.type == :integer then :integer
+                     when column.type == :decimal then :decimal
                      when column.number? then :numeric
                      when column.text? then :text
                      when column.type == :boolean then :boolean
@@ -107,8 +108,11 @@ module SchemaValidations
           case datatype
           when :integer
             validate_logged :validates_numericality_of, name, :allow_nil => true, :only_integer => true
+          when :decimal
+            validate_logged_numericality name
+            validate_logged :validates_precision_of, name, :precision => column.precision, :scale => column.scale
           when :numeric
-            validate_logged :validates_numericality_of, name, :allow_nil => true
+            validate_logged_numericality name
           when :text
             validate_logged :validates_length_of, name, :allow_nil => true, :maximum => column.limit if column.limit
           end
@@ -156,6 +160,10 @@ module SchemaValidations
 
       def create_schema_validations? #:nodoc:
         schema_validations_config.auto_create? && !(schema_validations_loaded || abstract_class? || name.blank? || !table_exists?)
+      end
+
+      def validate_logged_numericality(name)
+        validates_numericality_of name, :allow_nil => true
       end
 
       def validate_logged(method, arg, opts={}) #:nodoc:
