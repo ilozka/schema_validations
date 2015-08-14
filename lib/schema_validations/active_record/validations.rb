@@ -33,15 +33,15 @@ module SchemaValidations
       def validates_precision_of(attr_names, opts = { })
         validates_each(attr_names, {}) do |record, attr, value|
           value = record.send("#{attr}_before_type_cast").to_s.strip
-          next unless value.present? && value.include?('.')
+          next unless value.present?
 
           int, dec = value.split('.')
 
           if int && int.size > opts[:precision]
-            max_int_value = 10 ** (opts[:precision] - opts[:scale]) - 1
+            max_int_value = 10 ** (opts[:precision] - opts[:scale].to_i) - 1
             record.errors.add(attr, "maximum value is #{max_int_value}")
           end
-          if dec && dec.to_i > 0 && dec.to_s.gsub(/\A0+\Z/,'').size > opts[:scale]
+          if dec && dec.to_i > 0 && dec.to_s.gsub(/\A0+\Z/,'').size > opts[:scale].to_i
             record.errors.add(attr, "field accepts at most #{opts[:scale]} decimals")
           end
         end
