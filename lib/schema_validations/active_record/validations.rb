@@ -38,7 +38,7 @@ module SchemaValidations
           int, dec  = value.split('.')
           clean_dec = dec.to_s.gsub(/0+\Z/, '')
 
-          if int && int.size > (opts[:precision] - opts[:scale])
+          if int && int.size > (opts[:precision].to_i - opts[:scale].to_i)
             max_int_value = 10 ** (opts[:precision] - opts[:scale].to_i) - 1
             record.errors.add(attr, "maximum value is #{max_int_value}")
           end
