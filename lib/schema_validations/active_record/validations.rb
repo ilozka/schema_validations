@@ -36,7 +36,7 @@ module SchemaValidations
           next unless value.present?
 
           int, dec  = value.split('.')
-          clean_dec = dec.gsub(/0+\Z/, '')
+          clean_dec = dec.to_s.gsub(/0+\Z/, '')
 
           if int && int.size > (opts[:precision] - opts[:scale])
             max_int_value = 10 ** (opts[:precision] - opts[:scale].to_i) - 1
