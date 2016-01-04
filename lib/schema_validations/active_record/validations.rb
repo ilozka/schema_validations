@@ -35,13 +35,14 @@ module SchemaValidations
           value = record.send("#{attr}_before_type_cast").to_s.strip
           next unless value.present?
 
-          int, dec = value.split('.')
+          int, dec  = value.split('.')
+          clean_dec = dec.gsub(/0+\Z/, '')
 
-          if int && int.size > opts[:precision]
+          if int && int.size > (opts[:precision] - opts[:scale])
             max_int_value = 10 ** (opts[:precision] - opts[:scale].to_i) - 1
             record.errors.add(attr, "maximum value is #{max_int_value}")
           end
-          if dec && dec.to_i > 0 && dec.to_s.gsub(/\A0+\Z/,'').size > opts[:scale].to_i
+          if dec && dec.to_i > 0 && clean_dec.size > opts[:scale].to_i
             record.errors.add(attr, "field accepts at most #{opts[:scale]} decimals")
           end
         end
