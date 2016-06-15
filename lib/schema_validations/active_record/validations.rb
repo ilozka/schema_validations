@@ -125,7 +125,10 @@ module SchemaValidations
 
           case datatype
           when :integer
-            validate_logged :validates_numericality_of, name, :allow_nil => true, :only_integer => true
+            validate_logged(:validates, name,
+                            allow_nil: true,
+                            numericality: { only_integer: true },
+                            inclusion: column.cast_type.instance_variable_get("@range"))
           when :decimal
             validate_logged_numericality name
             validate_logged :validates_precision_of, name, :precision => column.precision, :scale => column.scale
