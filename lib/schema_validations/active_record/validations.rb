@@ -1,214 +1,228 @@
 module SchemaValidations
   module ActiveRecord
-    module Validations
+    module Base
 
-      def self.extended(base) # :nodoc:
-        base.class_eval do
-          define_method :load_schema_validations do
-            self.class.send :load_schema_validations
-          end
-          class_attribute :schema_validations_loaded
-        end
-        class << base
-          alias_method_chain :validators, :schema_validations
-          alias_method_chain :validators_on, :schema_validations
-        end if base.respond_to? :validators
+      def load_schema_validations
+        self.class.send :load_schema_validations
       end
 
-      def inherited(klass) # :nodoc:
-        super
-        before_validation :load_schema_validations unless schema_validations_loaded?
-      end
+      module ClassMethods
 
-      def validators_with_schema_validations
-        load_schema_validations unless schema_validations_loaded?
-        validators_without_schema_validations
-      end
-
-      def validators_on_with_schema_validations(*args)
-        load_schema_validations unless schema_validations_loaded?
-        validators_on_without_schema_validations(*args)
-      end
-
-      def validates_precision_of(attr_names, opts = { })
-        validates_each(attr_names, {}) do |record, attr, value|
-          value = record.send("#{attr}_before_type_cast").to_s.strip
-          next unless value.present?
-
-          int, dec  = value.split('.')
-          clean_dec = dec.to_s.gsub(/0+\Z/, '')
-
-          if int && int.size > (opts[:precision].to_i - opts[:scale].to_i)
-            max_int_value = 10 ** (opts[:precision] - opts[:scale].to_i) - 1
-            record.errors.add(attr, "maximum value is #{max_int_value}")
-          end
-          if dec && dec.to_i > 0 && clean_dec.size > opts[:scale].to_i
-            record.errors.add(attr, "field accepts at most #{opts[:scale]} decimals")
+        def self.extended(base)
+          base.class_eval do
+            class_attribute :schema_validations_loaded
           end
         end
-      end
 
-      # Per-model override of Config options.  Use via, e.g.
-      #     class MyModel < ActiveRecord::Base
-      #         schema_validations :auto_create => false
-      #     end
-      #
-      # If <tt>:auto_create</tt> is not specified, it is implicitly
-      # specified as true.  This allows the "non-invasive" style of using
-      # SchemaValidations in which you set the global Config to
-      # <tt>auto_create = false</tt>, then in any model that you want auto
-      # validations you simply do:
-      #
-      #     class MyModel < ActiveRecord::Base
-      #         schema_validations
-      #     end
-      #
-      #  Of course other options can be passed, such as
-      #
-      #     class MyModel < ActiveRecord::Base
-      #         schema_validations :except_type => :validates_presence_of
-      #     end
-      #
-      #
-      def schema_validations(opts={})
-        @schema_validations_config = SchemaValidations.config.merge({:auto_create => true}.merge(opts))
-      end
+        def inherited(subclass) # :nodoc:
+          super
+          before_validation :load_schema_validations unless schema_validations_loaded?
+        end
 
-      def schema_validations_config # :nodoc:
-        @schema_validations_config ||= SchemaValidations.config.dup
-      end
+        def validators
+          load_schema_validations unless schema_validations_loaded?
+          super
+        end
 
-      private
-      # Adds schema-based validations to model.
-      # Attributes as well as associations are validated.
-      # For instance if there is column
-      #
-      #     <code>email NOT NULL</code>
-      #
-      # defined at database-level it will be translated to
-      #
-      #     <code>validates_presence_of :email</code>
-      #
-      # If there is an association named <tt>user</tt>
-      # based on <tt>user_id NOT NULL</tt> it will be translated to
-      #
-      #     <code>validates_presence_of :user</code>
-      #
-      #  Note it uses the name of association (user) not the column name (user_id).
-      #  Only <tt>belongs_to</tt> associations are validated.
-      #
-      #  This accepts following options:
-      #  * :only - auto-validate only given attributes
-      #  * :except - auto-validate all but given attributes
-      #
-      def load_schema_validations #:nodoc:
-        # Don't bother if: it's already been loaded; the class is abstract; not a base class; or the table doesn't exist
-        return unless create_schema_validations?
-        load_column_validations
-        load_association_validations
-        self.schema_validations_loaded = true
-      end
+        def validators_on(*args)
+          load_schema_validations unless schema_validations_loaded?
+          super
+        end
 
-      def load_column_validations #:nodoc:
-        content_columns.each do |column|
-          name = column.name.to_sym
+        def validates_precision_of(attr_names, opts = { })
+          validates_each(attr_names, {}) do |record, attr, value|
+            value = record.send("#{attr}_before_type_cast").to_s.strip
+            next unless value.present?
 
-          # Data-type validation
-          datatype = case
-                     when respond_to?(:defined_enums) && defined_enums.has_key?(column.name) then :enum
-                     when column.type == :integer then :integer
-                     when column.type == :decimal then :decimal
-                     when column.number? then :numeric
-                     when column.text? then :text
-                     when column.type == :boolean then :boolean
-                     end
+            int, dec  = value.split('.')
+            clean_dec = dec.to_s.gsub(/0+\Z/, '')
 
-          case datatype
-          when :integer
-            validate_logged(:validates, name,
-                            allow_nil: true,
-                            numericality: { only_integer: true },
-                            inclusion: column.cast_type.instance_variable_get("@range"))
-          when :decimal
-            validate_logged_numericality name
-            validate_logged :validates_precision_of, name, :precision => column.precision, :scale => column.scale
-          when :numeric
-            validate_logged_numericality name
-          when :text
-            validate_logged :validates_length_of, name, :allow_nil => true, :maximum => column.limit if column.limit
-          end
-
-          # NOT NULL constraints
-          if column.required_on
-            if datatype == :boolean
-              validate_logged :validates_inclusion_of, name, :in => [true, false], :message => :blank
-            else
-              validate_logged :validates_presence_of, name
+            if int && int.size > (opts[:precision].to_i - opts[:scale].to_i)
+              max_int_value = 10 ** (opts[:precision] - opts[:scale].to_i) - 1
+              record.errors.add(attr, "maximum value is #{max_int_value}")
+            end
+            if dec && dec.to_i > 0 && clean_dec.size > opts[:scale].to_i
+              record.errors.add(attr, "field accepts at most #{opts[:scale]} decimals")
             end
           end
-
-          # UNIQUE constraints
-          add_uniqueness_validation(column) if column.unique?
         end
-      end
 
-      def load_association_validations #:nodoc:
-        reflect_on_all_associations(:belongs_to).each do |association|
-          # :primary_key_name was deprecated (noisily) in rails 3.1
-          foreign_key_method = (association.respond_to? :foreign_key) ?  :foreign_key : :primary_key_name
-          column = columns_hash[association.send(foreign_key_method).to_s]
-          next unless column
-
-          # NOT NULL constraints
-          validate_logged :validates_presence_of, association.name if column.required_on
-
-          # UNIQUE constraints
-          add_uniqueness_validation(column) if column.unique?
+        def schema_validations(opts={})
+          @schema_validations_config = SchemaValidations.config.merge({:auto_create => true}.merge(opts))
         end
-      end
 
-      def add_uniqueness_validation(column) #:nodoc:
-        scope = column.unique_scope.map(&:to_sym)
-        name = column.name.to_sym
-        validate_logged :validates_uniqueness_of, name, :scope => scope, :allow_nil => true, :if => (proc do |record|
-          if scope.all? { |scope_sym| record.public_send(:"#{scope_sym}?") }
-            record.public_send(:"#{column.name}_changed?")
-          else
-            false
+        def schema_validations_config # :nodoc:
+          @schema_validations_config ||= SchemaValidations.config.dup
+        end
+
+        private
+        # Adds schema-based validations to model.
+        # Attributes as well as associations are validated.
+        # For instance if there is column
+        #
+        #     <code>email NOT NULL</code>
+        #
+        # defined at database-level it will be translated to
+        #
+        #     <code>validates_presence_of :email</code>
+        #
+        # If there is an association named <tt>user</tt>
+        # based on <tt>user_id NOT NULL</tt> it will be translated to
+        #
+        #     <code>validates_presence_of :user</code>
+        #
+        #  Note it uses the name of association (user) not the column name (user_id).
+        #  Only <tt>belongs_to</tt> associations are validated.
+        #
+        #  This accepts following options:
+        #  * :only - auto-validate only given attributes
+        #  * :except - auto-validate all but given attributes
+        #
+        def load_schema_validations #:nodoc:
+          # Don't bother if: it's already been loaded; the class is abstract; not a base class; or the table doesn't exist
+          return unless create_schema_validations?
+          load_column_validations
+          load_association_validations
+          self.schema_validations_loaded = true
+        end
+
+        def load_column_validations #:nodoc:
+          content_columns.each do |column|
+            name = column.name.to_sym
+
+            # Data-type validation
+            datatype = case
+                       when respond_to?(:defined_enums) && defined_enums.has_key?(column.name) then :enum
+                       when column.type == :integer then :integer
+                       when column.type == :decimal || column.type == :money then :decimal
+                       when column.type == :float   then :numeric
+                       when column.type == :text || column.type == :string then :text
+                       when column.type == :boolean then :boolean
+                       end
+
+            case datatype
+            when :integer
+              load_integer_column_validations(name, column)
+            when :decimal
+              validate_logged_numericality name
+              validate_logged :validates_precision_of, name, :precision => column.precision, :scale => column.scale
+              # if column.precision
+              #   limit = 10 ** (column.precision - (column.scale || 0))
+              #   validate_logged :validates_numericality_of, name, :allow_nil => true, :greater_than => -limit, :less_than => limit
+              # end
+            when :numeric
+              validate_logged :validates_numericality_of, name, :allow_nil => true
+            when :text
+              validate_logged :validates_length_of, name, :allow_nil => true, :maximum => column.limit if column.limit
+            end
+
+            # NOT NULL constraints
+            if column.required_on
+              if datatype == :boolean
+                validate_logged :validates_inclusion_of, name, :in => [true, false], :message => :blank
+              else
+                if !column.default.nil? && column.default.blank?
+                  validate_logged :validates_with, SchemaValidations::Validators::NotNilValidator, attributes: [name]
+                else
+                  # Validate presence
+                  validate_logged :validates_presence_of, name
+                end
+              end
+            end
+
+            # UNIQUE constraints
+            add_uniqueness_validation(column) if column.unique?
           end
-        end)
-      end
-
-      def create_schema_validations? #:nodoc:
-        schema_validations_config.auto_create? && !(schema_validations_loaded || abstract_class? || name.blank? || !table_exists?)
-      end
-
-      def validate_logged_numericality(name)
-        validate_logged :validates_numericality_of, name, :allow_nil => true
-      end
-
-      def validate_logged(method, arg, opts={}) #:nodoc:
-        if _filter_validation(method, arg)
-          msg = "[schema_validations] #{self.name}.#{method} #{arg.inspect}"
-          msg += ", #{opts.inspect[1...-1]}" if opts.any?
-          logger.debug msg
-          send method, arg, opts
         end
-      end
 
-      def _filter_validation(macro, name) #:nodoc:
-        config = schema_validations_config
-        types = [macro]
-        if match = macro.to_s.match(/^validates_(.*)_of$/)
-          types << match[1].to_sym
+        def load_integer_column_validations(name, column) # :nodoc:
+          integer_range = ::ActiveRecord::Type::Integer.new.range
+          # The Ruby Range object does not support excluding the beginning of a Range,
+          # so we always include :greater_than_or_equal_to
+          options = { :allow_nil => true, :only_integer => true, greater_than_or_equal_to: integer_range.begin }
+
+          if integer_range.exclude_end?
+            options[:less_than] = integer_range.end
+          else
+            options[:less_than_or_equal_to] = integer_range.end
+          end
+
+          validate_logged :validates_numericality_of, name, options
         end
-        return false if config.only        and not Array.wrap(config.only).include?(name)
-        return false if config.except      and     Array.wrap(config.except).include?(name)
-        return false if config.only_type   and not (Array.wrap(config.only_type) & types).any?
-        return false if config.except_type and     (Array.wrap(config.except_type) & types).any?
-        return true
-      end
 
+        def load_association_validations #:nodoc:
+          reflect_on_all_associations(:belongs_to).each do |association|
+            # :primary_key_name was deprecated (noisily) in rails 3.1
+            foreign_key_method = (association.respond_to? :foreign_key) ?  :foreign_key : :primary_key_name
+            column = columns_hash[association.send(foreign_key_method).to_s]
+            next unless column
+
+            # NOT NULL constraints
+            validate_logged :validates_presence_of, association.name if column.required_on
+
+            # UNIQUE constraints
+            add_uniqueness_validation(column) if column.unique?
+          end
+        end
+
+        def validate_logged_numericality(name)
+          validate_logged :validates_numericality_of, name, :allow_nil => true
+        end
+
+        def add_uniqueness_validation(column) #:nodoc:
+          scope = column.unique_scope.map(&:to_sym)
+          name = column.name.to_sym
+
+          options = {}
+          options[:scope] = scope if scope.any?
+          options[:allow_nil] = true
+          options[:case_sensitive] = false if has_case_insensitive_index?(column, scope)
+          options[:if] = (proc do |record|
+            if scope.all? { |scope_sym| record.public_send(:"#{scope_sym}?") }
+              record.public_send(:"#{column.name}_changed?")
+            else
+              false
+            end
+          end)
+          validate_logged :validates_uniqueness_of, name, options
+        end
+
+        def has_case_insensitive_index?(column, scope)
+          indexed_columns = (scope + [column.name]).map(&:to_sym).sort
+          index = column.indexes.select { |i| i.unique && i.columns.map(&:to_sym).sort == indexed_columns }.first
+
+          index && index.respond_to?(:case_sensitive?) && !index.case_sensitive?
+        end
+
+        def create_schema_validations? #:nodoc:
+          schema_validations_config.auto_create? && !(schema_validations_loaded || abstract_class? || name.blank? || !table_exists?)
+        end
+
+        def validate_logged(method, arg, opts={}) #:nodoc:
+          if _filter_validation(method, arg)
+            msg = "[schema_validations] #{self.name}.#{method} #{arg.inspect}"
+            msg += ", #{opts.inspect[1...-1]}" if opts.any?
+            logger.debug msg if logger
+            send method, arg, opts
+          end
+        end
+
+        def _filter_validation(macro, name) #:nodoc:
+          config = schema_validations_config
+          types = [macro]
+          if match = macro.to_s.match(/^validates_(.*)_of$/)
+            types << match[1].to_sym
+          end
+          return false if config.only           and not Array.wrap(config.only).include?(name)
+          return false if config.except         and     Array.wrap(config.except).include?(name)
+          return false if config.whitelist      and     Array.wrap(config.whitelist).include?(name)
+          return false if config.only_type      and not (Array.wrap(config.only_type) & types).any?
+          return false if config.except_type    and     (Array.wrap(config.except_type) & types).any?
+          return false if config.whitelist_type and     (Array.wrap(config.whitelist_type) & types).any?
+          return true
+        end
+
+      end
     end
 
   end

@@ -1,5 +1,5 @@
 ruby:
-  - 2.1.5
+  - 2.3.1
 activerecord:
   - 5.1
 db:
