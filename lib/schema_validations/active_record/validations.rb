@@ -181,10 +181,7 @@ module SchemaValidations
             invalid_scopes = scope.select { |scope_sym| !record.respond_to?(:"#{scope_sym}?") }
             if invalid_scopes.any?
                # column information broken for GCP pod - non-existent column is returned for a model
-               Rails.logger.error "[reset_column_info] for #{record.class.name} - #{invalid_scopes}"
-               record.class.reset_column_information
-               scope = column.unique_scope.map(&:to_sym)
-               options[:scope] = scope if scope.any?
+               Rails.logger.error "[wrong_column_info] for #{record.class.name} - #{invalid_scopes}"
             end
             if scope.all? { |scope_sym| record.respond_to?(:"#{scope_sym}?") && record.public_send(:"#{scope_sym}?") }
               record.public_send(:"#{column.name}_changed?")
